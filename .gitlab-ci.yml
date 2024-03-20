@@ -1,0 +1,83 @@
+# .gitlab-ci.yml
+image: amazon/aws-cli
+
+variables:
+  AWS_ACCESS_KEY_ID: 'AAAAB3NzaC1yc2EAAAADAQABAAABgQDDXt9ggEwtVxQP8MJe'
+  AWS_SECRET_ACCESS_KEY: 'jrI6sAaVrguCyU242CYyI33TAUPWEYRx6E6xfH/k35lUxmw86fjRUIKbii96qAEHaL' 
+
+stages:
+  - fetch-code
+  - build
+  - test
+  - scan
+  - deploy-staging
+  - deploy-production
+
+cache:
+  key: ${CI_COMMIT_REF_SLUG}
+  paths:
+    - website/ # Cache the website code
+
+before_script:
+  - aws configure set aws_access_key_id $AWS_ACCESS_KEY_ID
+  - aws configure set aws_secret_access_key $AWS_SECRET_ACCESS_KEY
+  - aws configure set region us-east-1
+
+fetch-code:
+  stage: fetch-code
+  script:
+    - git clone https://github.com/nilaso12/ParlAI/website
+  artifacts:
+    paths:
+      - website/
+
+build:
+  stage: build
+  script:
+    - npm ci --prefix website
+    - npm run build --prefix website
+  artifacts:
+    paths:
+      - website/build/
+unit_test:
+  stage: test
+  script:
+    - npm run test:unit
+
+integration_test:
+  stage: test
+  script:
+    - npm run test:integration
+
+code_scan:
+  stage: scan
+  script:
+    - npm run lint
+    - npm run security-scan
+
+deploy_staging:
+  stage: deploy-staging
+  script:
+    - ./deploy_staging.sh
+  environment:
+    name: staging
+    url: https://staging.ParlAI.com
+  only:
+    changes:
+      - website/*
+  when: manual
+
+deploy_production:
+  stage: deploy-production
+  script:
+    - ./deploy_production.sh
+  environment:
+    name: production
+    url: https://ParlAI.com
+  when: manual
+  only:
+    - main
+
+after_script:
+  - aws configure unset aws_access_key_id
+  - aws configure unset aws_secret_access_key
